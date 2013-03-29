@@ -75,7 +75,10 @@ KNOB<UINT32> KnobLineSize(KNOB_MODE_WRITEONCE, "pintool",
 KNOB<UINT32> KnobAssociativity(KNOB_MODE_WRITEONCE, "pintool",
     "a","4", "cache associativity (1 for direct mapped)");
 
-KNOB<UINT32> KnobSPMSize(KNOB_MODE_WRITEONCE,"foo",
+
+//=================================================//
+KNOB<UINT32> KnobSPMSize(KNOB_MODE_WRITEONCE,"pintool",
+
     "ss","256","spm size(kilo Byte)");
 
 KNOB<UINT32> KnobSPMBlockSize(KNOB_MODE_WRITEONCE,"pintool","sb","1","spm block size(kilo Byte)");
@@ -84,11 +87,10 @@ KNOB<double> KnobSPMProbability(KNOB_MODE_WRITEONCE,"pintool","sp","0.01","spm a
 
 KNOB<UINT32> KnobSPMNthreshold(KNOB_MODE_WRITEONCE,"pintool",
                                "sn","8","spm visit count threshold");
-
-// KNOB<UINT32> KnobSPMNthreshold(KNOB_MODE_WRITEONCE,"pintool",
-//                                "sm","1",
-//                                "hybrid configruation,1 for two approach hybrid,2 for single probability,3 for single visit count");
-
+KNOB<UINT32> KnobSPMStrategy(KNOB_MODE_WRITEONCE,"pintool",
+                               "sw","1",
+                               "hybrid configruation,1 for two approach hybrid,2 for single probability,3 for single visit count");
+KNOB<BOOL> KnobSPMSwitch(KNOB_MODE_WRITEONCE,"pintool","sz","1","turn on spm mode,on default");
 
 /* ===================================================================== */
 
@@ -120,7 +122,6 @@ namespace DL1
 }
 
 DL1::CACHE* dl1 = NULL;
-
 SPM* spm = NULL;
 
 typedef enum
@@ -221,7 +222,7 @@ VOID StoreSingleFast(ADDRINT addr)
 
 VOID HybridLoad(ADDRINT addr, UINT32 size, UINT32 instId)
 {
-    if (spm->Access3(addr,size))
+    if (KnobSPMSwitch && spm->Access(addr,size))
     {
         return;
     }
@@ -241,7 +242,7 @@ VOID HybridLoad(ADDRINT addr, UINT32 size, UINT32 instId)
 
 VOID HybridStore(ADDRINT addr, UINT32 size, UINT32 instId)
 {
-    if (spm->Access3(addr,size))
+    if (KnobSPMSwitch && spm->Access(addr,size))
     {
         return;
     }
@@ -406,32 +407,27 @@ VOID Fini(int code, VOID * v)
 {
 
     std::ofstream out(KnobOutputFile.Value().c_str());
-
     // print D-cache profile
     // @todo what does this print
-
-    out << "======================\n";
-    
-    out << spm->Stats() << "\n";
-
-    out << "======================\n";
-
-    out << "PIN:MEMLATENCIES 1.0. 0x0\n";
-            
-    out <<
-        "#\n"
-        "# DCACHE stats\n"
-        "#\n";
-    
-    out << dl1->StatsLong("# ", CACHE_BASE::CACHE_TYPE_DCACHE);
-
-    if( KnobTrackLoads || KnobTrackStores ) {
+    if(KnobSPMSwitch)
+    {
+        out << spm->Stats() << std::endl;
+    }
+    else
+    {
+        out << "PIN:MEMLATENCIES 1.0. 0x0\n";
         out <<
             "#\n"
-            "# LOAD stats\n"
+            "# DCACHE stats\n"
             "#\n";
-        
-        out << profile.StringLong();
+        out << dl1->StatsLong("# ", CACHE_BASE::CACHE_TYPE_DCACHE);
+        if( KnobTrackLoads || KnobTrackStores ) {
+            out <<
+                "#\n"
+                "# LOAD stats\n"
+                "#\n";
+            out << profile.StringLong();
+        }
     }
     out.close();
 }
@@ -440,41 +436,44 @@ VOID Fini(int code, VOID * v)
 
 int main(int argc, char *argv[])
 {
-
-    
     PIN_InitSymbols();
     if( PIN_Init(argc,argv) )
     {
         return Usage();
     }
-
-    spm = new SPM(KnobSPMSize.Value(),
-                  KnobSPMBlockSize.Value(),
-                  KnobSPMProbability.Value(),KnobSPMNthreshold.Value(),
-                  SPM::ALL);
-
+    if(KnobSPMSwitch)
+    {
+        SPM::SPM_Strategy strategy = SPM::ALL;
+        switch(KnobSPMStrategy.Value())
+        {
+          case 1:
+            strategy = SPM::ALL; break;
+          case 2:
+            strategy = SPM::PROB_ONLY; break;
+          case 3:
+            strategy = SPM::COUNT_ONLY; break;
+        }
+        spm = new SPM(KnobSPMSize.Value(),
+                      KnobSPMBlockSize.Value(),
+                      KnobSPMProbability.Value(),KnobSPMNthreshold.Value(),
+                      strategy);
+    }
     dl1 = new DL1::CACHE("L1 Data Cache", 
                          KnobCacheSize.Value() * KILO,
                          KnobLineSize.Value(),
                          KnobAssociativity.Value());
-    
     profile.SetKeyName("iaddr          ");
     profile.SetCounterName("dcache:miss        dcache:hit");
-
     COUNTER_HIT_MISS threshold;
-
     threshold[COUNTER_HIT] = KnobThresholdHit.Value();
     threshold[COUNTER_MISS] = KnobThresholdMiss.Value();
-    
     profile.SetThreshold( threshold );
     
     INS_AddInstrumentFunction(Instruction, 0);
     PIN_AddFiniFunction(Fini, 0);
 
     // Never returns
-
     PIN_StartProgram();
-    
     return 0;
 }
 

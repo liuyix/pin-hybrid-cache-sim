@@ -62,10 +62,11 @@ class SPM
     };
     //SPM(UINT32 size,UINT32 blksize,double threshold,UINT32 nthreshold);
     SPM(UINT32 size,UINT32 blksize,double threshold,UINT32 nthreshold,SPM_Strategy s);
-    
+    bool Access_Count(ADDRINT addr, UINT32 size);
+    bool Access_Random(ADDRINT addr,UINT32 size);//访问计数
+    bool Access_Both(ADDRINT addr,UINT32 size);
     bool Access(ADDRINT addr, UINT32 size);
-    bool Access2(ADDRINT addr,UINT32 size);//访问计数
-    bool Access3(ADDRINT addr,UINT32 size);
+    
     string Stats() const;//最后统计结果输出
   private:
     const UINT32 _spmsize;
@@ -90,6 +91,7 @@ class SPM
     //VOID Replace(ADDRINT oldidx,ADDRINT newidx);// 使用LRU？
     bool HasSpace() { return _curblkcnt < _blockcnt; };
     bool Find(ADDRINT pageidx);
+    
 };
 
 // SPM::SPM(UINT32 size,UINT32 blksize,double threshold,UINT32 nthreshold)          
@@ -168,8 +170,23 @@ bool SPM::Find(ADDRINT pageidx)
 }
 
 
-
 bool SPM::Access(ADDRINT addr, UINT32 size)
+{
+    if (_strategy == ALL)
+        return Access_Both(addr,size);
+    else if(_strategy == COUNT_ONLY)
+        return Access_Count(addr, size);
+    else if(_strategy == PROB_ONLY)
+        return Access_Random(addr, size);
+    else
+    {
+        std::cerr << "strategy unrecognized!!" << std::endl;
+        return false;
+    }
+}
+
+
+bool SPM::Access_Random(ADDRINT addr, UINT32 size)
 {
     /*
       if page_index(addr) belongs to spm then hit++;
@@ -196,7 +213,7 @@ bool SPM::Access(ADDRINT addr, UINT32 size)
 }
 
 
-bool SPM::Access2(ADDRINT addr, UINT32 size)
+bool SPM::Access_Count(ADDRINT addr, UINT32 size)
 {
     /*
       if map[addr] not exist then map[addr] = 1;
@@ -229,7 +246,7 @@ bool SPM::Access2(ADDRINT addr, UINT32 size)
     
 }
 
-bool SPM::Access3(ADDRINT addr, UINT32 size)
+bool SPM::Access_Both(ADDRINT addr, UINT32 size)
 {
     /*
       if found in spm return true
@@ -270,17 +287,35 @@ bool SPM::Access3(ADDRINT addr, UINT32 size)
 string SPM::Stats() const
 {
     string statistic = "SPM Summary:\n";
+    string sStrategy = "?";
+    
+    switch(_strategy)
+    {
+      case ALL:
+      sStrategy = "All";
+      break;
+      case COUNT_ONLY:
+      sStrategy = "Count";
+      break;
+      
+      case PROB_ONLY:
+      sStrategy = "Prob";
+      break;
+      
+    }
+    
     std::ostringstream oss;
-    oss << statistic;
-    oss << "SPM size: " << _spmsize 
-        << "KB block size: " << _blocksize 
-        << "KB Probability: " << _threshold << std::endl; 
-    oss << "total:" << _accessCnt 
-        << "\thit:" << _hitCnt 
-        << "\treplace:" << _replaceCnt << std::endl;
-    oss << "hit ratio: " << ((double)_hitCnt / _accessCnt) 
-        << "\treplaceCnt: " << ((double)_replaceCnt/_accessCnt) 
-        << std::endl;
+    oss << "strategy " << sStrategy << std::endl
+        << "SPM_size " << _spmsize << std::endl
+        << "Block_size " << _blocksize << std::endl
+        << "Probability " << _threshold << std::endl
+        << "Count_threshold " << _nthreshold << std::endl
+        << "hit_ratio " << ((double)_hitCnt / _accessCnt) << std::endl
+        << "replace_ratio " << ((double)_replaceCnt/_accessCnt) << std::endl
+        << "total_cnt " << _accessCnt << std::endl
+        << "hit_cnt " << _hitCnt << std::endl
+        << "replace_cnt " << _replaceCnt;
+    
     string strSummary = oss.str();
     return strSummary;
 }
