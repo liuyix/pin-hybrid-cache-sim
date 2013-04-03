@@ -406,28 +406,28 @@ VOID Instruction(INS ins, void * v)
 VOID Fini(int code, VOID * v)
 {
 
-    std::ofstream out(KnobOutputFile.Value().c_str());
+    std::ofstream out(KnobOutputFile.Value().c_str(),std::ios::out|std::ios::app);
     // print D-cache profile
     // @todo what does this print
     if(KnobSPMSwitch)
     {
-        out << spm->Stats() << std::endl;
+        out << std::endl << spm->Stats() << std::endl;
     }
     else
     {
-        out << "PIN:MEMLATENCIES 1.0. 0x0\n";
-        out <<
-            "#\n"
-            "# DCACHE stats\n"
-            "#\n";
-        out << dl1->StatsLong("# ", CACHE_BASE::CACHE_TYPE_DCACHE);
-        if( KnobTrackLoads || KnobTrackStores ) {
-            out <<
-                "#\n"
-                "# LOAD stats\n"
-                "#\n";
-            out << profile.StringLong();
-        }
+        // out << "PIN:MEMLATENCIES 1.0. 0x0\n";
+        // out <<
+        //     "#\n"
+        //     "# DCACHE stats\n"
+        //     "#\n";
+        out << dl1->StatsLong("", CACHE_BASE::CACHE_TYPE_DCACHE);
+        // if( KnobTrackLoads || KnobTrackStores ) {
+        //     out <<
+        //         "#\n"
+        //         "# LOAD stats\n"
+        //         "#\n";
+        //     out << profile.StringLong();
+        // }
     }
     out.close();
 }
